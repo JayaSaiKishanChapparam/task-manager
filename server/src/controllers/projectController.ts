@@ -19,7 +19,15 @@ export class ProjectController {
       );
 
       const safePayload = safeSerialize(result.rows[0]);
+
+      // First create the event in the database to get its ID
+      const eventResult = await pool.query(
+        'INSERT INTO events (type, entity, payload, client_id, timestamp) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        ['CREATE', 'PROJECT', safePayload, req.body.client_id, Date.now()]
+      );
+
       const event = {
+        id: eventResult.rows[0].id,
         type: 'CREATE',
         entity: 'PROJECT',
         payload: safePayload,
@@ -27,21 +35,14 @@ export class ProjectController {
         timestamp: Date.now(),
       };
 
-      await pool.query(
-        'INSERT INTO events (type, entity, payload, client_id, timestamp) VALUES ($1, $2, $3, $4, $5)',
-        [
-          event.type,
-          event.entity,
-          event.payload,
-          event.client_id,
-          event.timestamp,
-        ]
-      );
-
-      // Broadcast the change to all connected clients
+      // Broadcast the change to all connected clients with the event ID
       this.io.emit('project:change', event);
 
-      res.status(201).json(result.rows[0]);
+      // Include eventId in response
+      res.status(201).json({
+        ...result.rows[0],
+        eventId: eventResult.rows[0].id,
+      });
     } catch (error) {
       console.error('Error creating project:', error);
       res.status(500).json({ error: 'Failed to create project' });
@@ -74,7 +75,13 @@ export class ProjectController {
 
       const safePayload = safeSerialize(result.rows[0]);
       // Record the event and broadcast it
+      const eventResult = await pool.query(
+        'INSERT INTO events (type, entity, payload, client_id, timestamp) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        ['DELETE', 'PROJECT', safePayload, req.body.client_id, Date.now()]
+      );
+
       const event = {
+        id: eventResult.rows[0].id,
         type: 'DELETE',
         entity: 'PROJECT',
         payload: safePayload,
@@ -82,18 +89,7 @@ export class ProjectController {
         timestamp: Date.now(),
       };
 
-      await pool.query(
-        'INSERT INTO events (type, entity, payload, client_id, timestamp) VALUES ($1, $2, $3, $4, $5)',
-        [
-          event.type,
-          event.entity,
-          event.payload,
-          event.client_id,
-          event.timestamp,
-        ]
-      );
-
-      // Broadcast the change to all connected clients
+      // Broadcast the change to all connected clients with the event ID
       this.io.emit('project:change', event);
 
       res.json(result.rows[0]);

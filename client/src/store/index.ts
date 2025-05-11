@@ -19,6 +19,7 @@ export const useStore = create<Store>((set, get) => ({
   socket,
   lastSyncTimestamp: Date.now(),
   projectToDelete: null,
+  processedEvents: new Set(),
 
   setProjectToDelete: (projectId: string | null) =>
     set({ projectToDelete: projectId }),
@@ -36,15 +37,16 @@ export const useStore = create<Store>((set, get) => ({
   deleteProject: async (projectId: string) => {
     try {
       set({ loading: true, error: null });
-      const response = await axios.delete<Project>(
+      const response = await axios.delete<Project & { eventId: number }>(
         `${API_URL}/projects/${projectId}`,
         {
           data: { client_id: socket.id },
         }
       );
-      const deletedProject = response.data;
+      const { eventId, ...deletedProject } = response.data;
 
       const event: ChangeEvent = {
+        id: eventId,
         type: 'DELETE',
         entity: 'PROJECT',
         payload: deletedProject,
@@ -83,13 +85,24 @@ export const useStore = create<Store>((set, get) => ({
   addProject: async (description: string) => {
     try {
       set({ loading: true, error: null });
-      const response = await axios.post<Project>(`${API_URL}/projects`, {
-        description,
-        client_id: socket.id,
-      });
-      const project = response.data;
+      const response = await axios.post<Project & { eventId: number }>(
+        `${API_URL}/projects`,
+        {
+          description,
+          client_id: socket.id,
+        }
+      );
+      const { eventId, ...project } = response.data;
+
+      // Add the event ID to processed events immediately
+      set((state) => ({
+        projects: [...state.projects, project],
+        processedEvents: new Set([...state.processedEvents, eventId]),
+        loading: false,
+      }));
 
       const event: ChangeEvent = {
+        id: eventId,
         type: 'CREATE',
         entity: 'PROJECT',
         payload: project,
@@ -98,10 +111,6 @@ export const useStore = create<Store>((set, get) => ({
       };
 
       socket.emit('project:change', event);
-      set((state) => ({
-        projects: [...state.projects, project],
-        loading: false,
-      }));
     } catch (error) {
       set({ error: handleError(error), loading: false });
     }
@@ -114,7 +123,7 @@ export const useStore = create<Store>((set, get) => ({
   ) => {
     try {
       set({ loading: true, error: null });
-      const response = await axios.post<Task>(
+      const response = await axios.post<Task & { eventId: number }>(
         `${API_URL}/projects/${projectId}/tasks`,
         {
           projectId,
@@ -123,9 +132,10 @@ export const useStore = create<Store>((set, get) => ({
           client_id: socket.id,
         }
       );
-      const task = response.data;
+      const { eventId, ...task } = response.data;
 
       const event: ChangeEvent = {
+        id: eventId,
         type: 'CREATE',
         entity: 'TASK',
         payload: task,
@@ -149,13 +159,17 @@ export const useStore = create<Store>((set, get) => ({
   updateTask: async (taskId: string, updates: Partial<Task>) => {
     try {
       set({ loading: true, error: null });
-      const response = await axios.put<Task>(`${API_URL}/tasks/${taskId}`, {
-        ...updates,
-        client_id: socket.id,
-      });
-      const updatedTask = response.data;
+      const response = await axios.put<Task & { eventId: number }>(
+        `${API_URL}/tasks/${taskId}`,
+        {
+          ...updates,
+          client_id: socket.id,
+        }
+      );
+      const { eventId, ...updatedTask } = response.data;
 
       const event: ChangeEvent = {
+        id: eventId,
         type: 'UPDATE',
         entity: 'TASK',
         payload: updatedTask,
@@ -181,12 +195,16 @@ export const useStore = create<Store>((set, get) => ({
   deleteTask: async (taskId: string, projectId: string) => {
     try {
       set({ loading: true, error: null });
-      const response = await axios.delete<Task>(`${API_URL}/tasks/${taskId}`, {
-        data: { client_id: socket.id },
-      });
-      const deletedTask = response.data;
+      const response = await axios.delete<Task & { eventId: number }>(
+        `${API_URL}/tasks/${taskId}`,
+        {
+          data: { client_id: socket.id },
+        }
+      );
+      const { eventId, ...deletedTask } = response.data;
 
       const event: ChangeEvent = {
+        id: eventId,
         type: 'DELETE',
         entity: 'TASK',
         payload: deletedTask,
@@ -211,15 +229,16 @@ export const useStore = create<Store>((set, get) => ({
       set({ loading: true, error: null });
 
       for (const taskId of taskIds) {
-        const response = await axios.delete<Task>(
+        const response = await axios.delete<Task & { eventId: number }>(
           `${API_URL}/tasks/${taskId}`,
           {
             data: { client_id: socket.id },
           }
         );
-        const deletedTask = response.data;
+        const { eventId, ...deletedTask } = response.data;
 
         const event: ChangeEvent = {
+          id: eventId,
           type: 'DELETE',
           entity: 'TASK',
           payload: deletedTask,
@@ -243,15 +262,16 @@ export const useStore = create<Store>((set, get) => ({
 
   syncEvents: async () => {
     try {
-      const { lastSyncTimestamp } = get();
+      const { lastSyncTimestamp, processedEvents } = get();
       const response = await axios.get<ChangeEvent[]>(`${API_URL}/events`, {
         params: { timestamp: lastSyncTimestamp },
       });
       const events = response.data;
 
       events.forEach((event) => {
-        if (event.client_id !== socket.id) {
+        if (!processedEvents.has(event.id) && event.client_id !== socket.id) {
           handleChangeEvent(event, set);
+          processedEvents.add(event.id);
         }
       });
 

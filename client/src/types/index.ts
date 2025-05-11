@@ -19,6 +19,7 @@ export interface Task {
 }
 
 export interface ChangeEvent {
+  id: number;
   type: 'CREATE' | 'UPDATE' | 'DELETE';
   entity: 'PROJECT' | 'TASK';
   payload: Project | Task;

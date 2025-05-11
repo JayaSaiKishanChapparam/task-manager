@@ -1,8 +1,15 @@
 import { Request, Response } from 'express';
 import { pool } from '../db';
 import { safeSerialize } from '../utils';
+import { Server } from 'socket.io';
 
 export class TaskController {
+  private readonly io: Server;
+
+  constructor(io: Server) {
+    this.io = io;
+  }
+
   createTask = async (req: Request, res: Response) => {
     try {
       const { projectId, title, configuration } = req.body;
@@ -20,12 +27,22 @@ export class TaskController {
 
       const safePayload = safeSerialize(result.rows[0]);
 
-      // Record the event
-      await pool.query(
-        'INSERT INTO events (type, entity, payload, client_id, timestamp) VALUES ($1, $2, $3, $4, $5)',
+      // Get event ID from database
+      const eventResult = await pool.query(
+        'INSERT INTO events (type, entity, payload, client_id, timestamp) VALUES ($1, $2, $3, $4, $5) RETURNING id',
         ['CREATE', 'TASK', safePayload, req.body.client_id, Date.now()]
       );
 
+      const event = {
+        id: eventResult.rows[0].id,
+        type: 'CREATE',
+        entity: 'TASK',
+        payload: safePayload,
+        client_id: req.body.client_id,
+        timestamp: Date.now(),
+      };
+
+      this.io.emit('task:change', event);
       res.status(201).json(result.rows[0]);
     } catch (error) {
       console.error('Error creating task:', error);
@@ -75,12 +92,21 @@ export class TaskController {
 
       const safePayload = safeSerialize(result.rows[0]);
 
-      // Record the event
-      await pool.query(
-        'INSERT INTO events (type, entity, payload, client_id, timestamp) VALUES ($1, $2, $3, $4, $5)',
+      const eventResult = await pool.query(
+        'INSERT INTO events (type, entity, payload, client_id, timestamp) VALUES ($1, $2, $3, $4, $5) RETURNING id',
         ['UPDATE', 'TASK', safePayload, req.body.client_id, Date.now()]
       );
 
+      const event = {
+        id: eventResult.rows[0].id,
+        type: 'UPDATE',
+        entity: 'TASK',
+        payload: safePayload,
+        client_id: req.body.client_id,
+        timestamp: Date.now(),
+      };
+
+      this.io.emit('task:change', event);
       res.json(result.rows[0]);
     } catch (error) {
       console.error('Error updating task:', error);
@@ -102,12 +128,21 @@ export class TaskController {
 
       const safePayload = safeSerialize(result.rows[0]);
 
-      // Record the event
-      await pool.query(
-        'INSERT INTO events (type, entity, payload, client_id, timestamp) VALUES ($1, $2, $3, $4, $5)',
+      const eventResult = await pool.query(
+        'INSERT INTO events (type, entity, payload, client_id, timestamp) VALUES ($1, $2, $3, $4, $5) RETURNING id',
         ['DELETE', 'TASK', safePayload, req.body.client_id, Date.now()]
       );
 
+      const event = {
+        id: eventResult.rows[0].id,
+        type: 'DELETE',
+        entity: 'TASK',
+        payload: safePayload,
+        client_id: req.body.client_id,
+        timestamp: Date.now(),
+      };
+
+      this.io.emit('task:change', event);
       res.json(result.rows[0]);
     } catch (error) {
       console.error('Error deleting task:', error);

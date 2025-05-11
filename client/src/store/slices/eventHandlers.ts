@@ -12,71 +12,82 @@ export const handleChangeEvent = (
   event: ChangeEvent,
   set: StoreApi<Store>['setState']
 ) => {
-  // Ignore events from the current client to prevent duplicate handling
   if (event.client_id === socket.id) {
     return;
   }
 
-  switch (event.entity) {
-    case 'PROJECT': {
-      const project = event.payload as Project;
-      if (event.type === 'CREATE') {
-        set((state) => ({
-          projects: [...state.projects, project],
-        }));
-      } else if (event.type === 'UPDATE') {
-        set((state) => ({
-          projects: state.projects.map((p) =>
-            p.id === project.id ? project : p
-          ),
-        }));
-      } else if (event.type === 'DELETE') {
-        set((state) => ({
-          projects: state.projects.filter((p) => p.id !== project.id),
-          tasks: Object.fromEntries(
-            Object.entries(state.tasks).filter(([pid]) => pid !== project.id)
-          ),
-        }));
-      }
-      break;
+  set((state) => {
+    if (state.processedEvents.has(event.id)) {
+      return state;
     }
 
-    case 'TASK': {
-      const task = event.payload as Task;
-      switch (event.type) {
-        case 'CREATE':
-          set((state) => ({
-            tasks: {
-              ...state.tasks,
-              [task.project_id]: [
-                ...(state.tasks[task.project_id] || []),
-                task,
-              ],
-            },
-          }));
-          break;
+    state.processedEvents.add(event.id);
 
-        case 'UPDATE':
-          set((state) => ({
-            tasks: updateTasksForProject(
-              state.tasks,
-              task.project_id,
-              (tasks) => updateTaskInList(tasks, task.id, task)
+    switch (event.entity) {
+      case 'PROJECT': {
+        const project = event.payload as Project;
+        if (event.type === 'CREATE') {
+          return {
+            ...state,
+            projects: [...state.projects, project],
+          };
+        } else if (event.type === 'UPDATE') {
+          return {
+            ...state,
+            projects: state.projects.map((p) =>
+              p.id === project.id ? project : p
             ),
-          }));
-          break;
-
-        case 'DELETE':
-          set((state) => ({
-            tasks: updateTasksForProject(
-              state.tasks,
-              task.project_id,
-              (tasks) => removeTaskFromList(tasks, task.id)
+          };
+        } else if (event.type === 'DELETE') {
+          return {
+            ...state,
+            projects: state.projects.filter((p) => p.id !== project.id),
+            tasks: Object.fromEntries(
+              Object.entries(state.tasks).filter(([pid]) => pid !== project.id)
             ),
-          }));
-          break;
+          };
+        }
+        break;
       }
-      break;
+
+      case 'TASK': {
+        const task = event.payload as Task;
+        switch (event.type) {
+          case 'CREATE':
+            return {
+              ...state,
+              tasks: {
+                ...state.tasks,
+                [task.project_id]: [
+                  ...(state.tasks[task.project_id] || []),
+                  task,
+                ],
+              },
+            };
+
+          case 'UPDATE':
+            return {
+              ...state,
+              tasks: updateTasksForProject(
+                state.tasks,
+                task.project_id,
+                (tasks) => updateTaskInList(tasks, task.id, task)
+              ),
+            };
+
+          case 'DELETE':
+            return {
+              ...state,
+              tasks: updateTasksForProject(
+                state.tasks,
+                task.project_id,
+                (tasks) => removeTaskFromList(tasks, task.id)
+              ),
+            };
+        }
+        break;
+      }
     }
-  }
+    return state;
+  });
 };

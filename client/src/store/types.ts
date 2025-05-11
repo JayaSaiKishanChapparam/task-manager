@@ -9,6 +9,7 @@ export interface Store {
   socket: typeof Socket;
   lastSyncTimestamp: number;
   projectToDelete: string | null;
+  processedEvents: Set<number>;
   fetchProjects: () => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
   fetchTasks: (projectId: string) => Promise<void>;

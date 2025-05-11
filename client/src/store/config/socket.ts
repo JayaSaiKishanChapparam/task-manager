@@ -15,15 +15,26 @@ const manager = new Manager(SOCKET_URL, {
 
 export const socket = manager.socket('/');
 
+// Debounce sync to prevent multiple rapid syncs
+let syncTimeout: NodeJS.Timeout | null = null;
+const debouncedSync = () => {
+  if (syncTimeout) {
+    clearTimeout(syncTimeout);
+  }
+  syncTimeout = setTimeout(() => {
+    useStore
+      .getState()
+      .syncEvents()
+      .catch((error) => {
+        console.error('Failed to sync events on connect:', error);
+        useStore.getState().error = 'Failed to sync with server';
+      });
+  }, 100);
+};
+
 socket.on('connect', () => {
   console.log('Socket connected:', socket.id);
-  useStore
-    .getState()
-    .syncEvents()
-    .catch((error) => {
-      console.error('Failed to sync events on connect:', error);
-      useStore.getState().error = 'Failed to sync with server';
-    });
+  debouncedSync();
 });
 
 socket.on('disconnect', (reason: string) => {
@@ -54,13 +65,21 @@ socket.on('pong-ack', () => {
 
 socket.on('project:change', (event: ChangeEvent) => {
   if (event.client_id !== socket.id) {
-    useStore.getState().handleChangeEvent(event);
+    const store = useStore.getState();
+    if (!store.processedEvents.has(event.id)) {
+      store.handleChangeEvent(event);
+      debouncedSync(); // Sync after receiving change to catch up with any missed events
+    }
   }
 });
 
 socket.on('task:change', (event: ChangeEvent) => {
   if (event.client_id !== socket.id) {
-    useStore.getState().handleChangeEvent(event);
+    const store = useStore.getState();
+    if (!store.processedEvents.has(event.id)) {
+      store.handleChangeEvent(event);
+      debouncedSync(); // Sync after receiving change to catch up with any missed events
+    }
   }
 });
 
