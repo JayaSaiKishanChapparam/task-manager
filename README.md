@@ -13,6 +13,8 @@ A real-time collaborative task management application built with React, Node.js,
 
 ## Architecture
 
+![Task Manager Architecture](./client/src/assets/Task_Manager_Architecture.svg)
+
 ### Tech Stack
 
 - **Frontend**: React + TypeScript + Vite
