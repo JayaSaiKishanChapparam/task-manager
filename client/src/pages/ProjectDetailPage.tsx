@@ -5,7 +5,7 @@ import { Box, Button, Typography } from '@mui/material';
 import { KeyboardArrowLeft } from '@mui/icons-material';
 import { TaskList } from '@/components/TaskList/TaskList';
 
-export function ProjectDetailPage() {
+const ProjectDetailPage = () => {
   const { projects, fetchTasks } = useStore();
   const navigate = useNavigate();
   const { projectId } = useParams();
@@ -48,4 +48,5 @@ export function ProjectDetailPage() {
       {projectId && <TaskList projectId={projectId} />}
     </Box>
   );
-}
+};
+export default ProjectDetailPage;

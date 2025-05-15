@@ -6,7 +6,7 @@ import { CreateProjectDialog } from '@/components/ProjectList/CreateProjectDialo
 import { DeleteProjectDialog } from '@/components/ProjectList/DeleteProjectDialog';
 import Grid from '@mui/material/Grid';
 
-export function ProjectsPage() {
+const ProjectsPage = () => {
   const { projects, loading, error, fetchProjects } = useStore();
 
   useEffect(() => {
@@ -67,4 +67,5 @@ export function ProjectsPage() {
       </Grid>
     </Box>
   );
-}
+};
+export default ProjectsPage;
